@@ -137,7 +137,7 @@ class ResponseImage{
         if($x>$imgwidth) $x = $x-$imgwidth;
         if($y>$imgheight) $y = $y-$imgheight;
         if($w>$imgwidth-$x) $w=$imgwidth-$x;
-        if($h==='auto') $h==$imgheight*$w/$imgwidth;
+        if($h==='auto') $h=$imgheight*$w/$imgwidth;
         if($h>$imgheight-$y) $h=$y-$imgheight;
 
         $new = imagecrop($imgres,array("x"=>$x,"y"=>$y,'width'=>$w,'height'=>$h));
