@@ -1,13 +1,13 @@
 <?php
 /*
- * 响应式图片
+ * 响应式图片类
+ * 杨海涛 2017年7月12日
+ *
  */
 
 class ResponseImage{
     //原始图片路径，长度和宽度
     public $RawImage;
-    public $RawWidth;
-    public $RawHeight;
 
     //新图片缓存目录
     private $CacheDir;
@@ -36,22 +36,24 @@ class ResponseImage{
             display_error(500,"请求资源不存在，请检查您的伪静态规则是否正确!");
         }
 
-        //初始化处理动作
-        $actionresult = $this->PsActioninit();
-        //图片参数错误
-        if(!empty($m[3]) && $actionresult===false && defined("DisplayRaw") && DisplayRaw ===true){
-            $this->Image=$this->RawImage;
-        }else if(!empty($m[3]) && $actionresult===false && DisplayRaw ===false){
-            display_error(500,"图片参数请求参数错误，请检查您的参数或者查看帮助文档!");
-        }
         //原始图片相关信息
         $RAWInfo = getimagesize($this->RawImage);
-        $this->RawWidth = $RAWInfo[0];
-        $this->RawHeight = $RAWInfo[1];
         $this->MIMETYPE = $RAWInfo['mime'];
-        
-        //如果请求的图片不是原始图片，并且原始图片出现更改，请重新生成需要的图片
-        if($this->Image!==$this->RawImage && (!file_exists($this->Image) || filemtime($this->Image) < filemtime($this->RawImage))){
+
+        //初始化处理动作，并获取Image的
+        $actionresult = $this->PsActioninit();
+        if(empty($m[3])){
+            //请求的是原始图片
+            $this->Image=$this->RawImage;
+        }elseif(!empty($m[3]) && $actionresult ===false && defined("DisplayRaw") && DisplayRaw ===true){
+            //图片参数错误，但设置为参数错误显示原始图片
+            $this->Image=$this->RawImage;
+        }else if(!empty($m[3]) && $actionresult===false && DisplayRaw ===false){
+            //图片参数错误，但设置为参数错误直接报错
+            display_error(500,"图片参数请求参数错误，请检查您的参数或者查看帮助文档!");
+        }else if(!empty($m[3]) && (!file_exists($this->Image) || filemtime($this->Image) < filemtime($this->RawImage))){
+            //请求的不是原始图片，需要生成客户端指定的图片
+            //前提:需要生成的图片不存在缓存||原始图片更改过了
             $this->imageinit();
         }
     }
@@ -108,37 +110,39 @@ class ResponseImage{
         return true;
     }
 
+
     //低级功能：缩放图片：第一个参数为图片资源参数，以原始图片
     private function reduceimage($imgres,$x,$y,$w,$h){
-        if($w>$this->RawWidth){
-            $w=$this->RawWidth;
-        }
-        if($h==="auto"){
-            $h = floor($this->RawHeight/($this->RawWidth/$w));
-        }
-        if($h>$this->RawHeight){
-            $h=$this->RawHeight;
-        }
+        $imgwidth = imagesx($imgres);
+        $imgheight = imagesy($imgres);
+        if($x>$imgwidth) $x = $x-$imgwidth;
+        if($y>$imgheight) $y = $y-$imgheight;
+        if($w>$imgwidth-$x) $w=$imgwidth-$x;
+        if($h==='auto') $h=$imgheight*$w/$imgwidth;
+        if($h>$imgheight-$y) $h=$y-$imgheight;
         $new = imagecreatetruecolor($w,$h);
-        if(imagecopyresampled($new,$imgres,0,0,$x,$y,$w,$h,($this->RawWidth-$x),($this->RawHeight-$y))){
+        if(imagecopyresampled($new,$imgres,0,0,$x,$y,$w,$h,$imgwidth-$x,$imgheight-$y)){
+            imagedestroy($imgres);
             return $new;
         }else{
+            imagedestroy($imgres);
             return false;
         }
     }
 
     //高级功能：裁剪图片
     private function cropimage($imgres,$x,$y,$w,$h){
-        if($w>$this->RawWidth){
-            $w=$this->RawWidth;
-        }
-        if($h==="auto"){
-            $h = floor($this->RawHeight/($this->RawWidth/$w));
-        }
-        if($h>$this->RawHeight){
-            $h=$this->RawHeight;
-        }
-        return imagecrop($imgres,array("x"=>$x,"y"=>$y,'width'=>$w,'height'=>$h));
+        $imgwidth = imagesx($imgres);
+        $imgheight = imagesy($imgres);
+        if($x>$imgwidth) $x = $x-$imgwidth;
+        if($y>$imgheight) $y = $y-$imgheight;
+        if($w>$imgwidth-$x) $w=$imgwidth-$x;
+        if($h==='auto') $h==$imgheight*$w/$imgwidth;
+        if($h>$imgheight-$y) $h=$y-$imgheight;
+
+        $new = imagecrop($imgres,array("x"=>$x,"y"=>$y,'width'=>$w,'height'=>$h));
+        imagedestroy($imgres);
+        return $new;
     }
 
 
@@ -147,10 +151,10 @@ class ResponseImage{
         if($this->MIMETYPE=="image/jpeg"){
             $res = imagecreatefromjpeg($this->RawImage);
             $storage="imagejpeg";
-        }else if($this->MEMETYPE=="image/gif"){
+        }else if($this->MIMETYPE=="image/gif"){
             $res = imagecreatefromgif($this->RawImage);
             $storage="imagegif";
-        }else if($this->MEMETYPE=="image/png"){
+        }else if($this->MIMETYPE=="image/png"){
             $res = imagecreatefrompng($this->RawImage);
             $storage="imagepng";
         }
@@ -169,7 +173,6 @@ class ResponseImage{
         $storage($res,$this->Image);
     }
 
-
     public function display(){
         $etag = md5_file($this->Image);
         $lastmodified = gmdate("D, d M Y H:i:s T",filemtime($this->Image));
@@ -184,40 +187,15 @@ class ResponseImage{
             header("Content-Type:".$this->MIMETYPE);
             header("Last-Modified:".$lastmodified);
             header("ETag:".$etag);
-            echo file_get_contents($this->Image);
+            $content = file_get_contents($this->Image);
+            header("Content-Length:".strlen($content));
+            echo $content;
         }
         return; 
     }
 
-
-    //COOKIE方式获取图片分辨率:现在不使用
-    private function CookieGetResolution(){
-        $width="100%";
-        $height="auto";
-        $resolution = isset($_COOKIE['plm-resolution'])?$_COOKIE['plm-resolution']:false;
-        if($resolution){
-            $tmp = explode("*",$resolution);
-            $devicewidth = (int)$tmp[0];
-            $deviceheight = (int)$tmp[1];
-            $devicepixeratio = (int)$tmp[2];
-        }
-        //计算设备像素，适用高清设备
-        $devicewpix = $devicewidth*$devicepixeratio;
-        $devicehpix = $deviceheight*$devicepixeratio;
-        if($this->RawWidth>$devicewpix){
-            $width=$devicewpix;
-        }else{
-            $width=$this->RawWidth;
-        }
-        if($this->RawHeight>$devicehpix){
-            $height=$devicehpix;
-        }else{
-            $height=$this->RawHeight;
-        }
-        return array("width"=>$width,"height"=>$height);
-    }
 }
-
+//展示错误信息
 function display_error($errorcode,$html){
     $error=array("403"=>"403 Forbidden","404"=>"404 Not Found","500"=>"Internal Server Error");
     header("HTTP/1.1 ".$error[$errorcode]);
@@ -228,4 +206,30 @@ function display_error($errorcode,$html){
         echo $html;
     }
     die;
+}
+//COOKIE方式获取图片分辨率:现在不使用
+function CookieGetResolution(){
+    $width="100%";
+    $height="auto";
+    $resolution = isset($_COOKIE['plm-resolution'])?$_COOKIE['plm-resolution']:false;
+    if($resolution){
+        $tmp = explode("*",$resolution);
+        $devicewidth = (int)$tmp[0];
+        $deviceheight = (int)$tmp[1];
+        $devicepixeratio = (int)$tmp[2];
+    }
+    //计算设备像素，适用高清设备
+    $devicewpix = $devicewidth*$devicepixeratio;
+    $devicehpix = $deviceheight*$devicepixeratio;
+    if($RawWidth>$devicewpix){
+        $width=$devicewpix;
+    }else{
+        $width=$RawWidth;
+    }
+    if($RawHeight>$devicehpix){
+        $height=$devicehpix;
+    }else{
+        $height=$RawHeight;
+    }
+    return array("width"=>$width,"height"=>$height);
 }

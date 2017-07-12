@@ -23,16 +23,55 @@
  //[]中的为可选值，x,y不填默认为0,height不填默认为图片高度（剪裁）和宽度缩小后图片高度（缩放）
  * 2, 服务器重写至此文件
  *
- * 下面是最基础的配置:
+ * 最基础的配置:
  */
-error_reporting(E_ALL);
 //404页面
 define("Page404","a");
 //缓存目录
 define("CacheDir","./caches");
+//是否打开排错功能
+define("Debug",true);
 //图片参数错误时，显示原始图片
 define("DisplayRaw",false);
+//是否对图片的进行外链保护
+define("ImageProtect",false);
+//图片保护白名单
+$whitelist=array("ip"=>array('127.0.0.1','::1'),"useragent"=>array('Bingbot','Googlebot','BaiduSpider','YandexBot','360Spider'),'host'=>array('localhost'));
 
+//不要更改下面的代码
+if(defined('Debug') && Debug == true){
+    error_reporting(E_ALL);
+}
+if(defined('ImageProtect') && ImageProtect == true && is_forbid()){
+   header("HTTP/1.1 403 Forbid"); 
+   die;
+}
 require_once("./responseimage.class.php");
 $img = new ResponseImage("./caches");
 $img->display();
+
+function is_forbid(){
+    global $whitelist;
+    $useragent = @$_SERVER['HTTP_USER_AGENT'];
+    $remoteip  = @$_SERVER['REMOTE_ADDR'];
+    $referer = @$_SERVER['HTTP_REFERER'];
+     foreach($whitelist['ip'] as $ip){
+        if($ip==$remoteip){
+            return false;
+        }
+    }
+    foreach($whitelist['useragent'] as $ua){
+        if(strpos($useragent,$ua)!==false){
+            return false;
+        }
+    }
+    foreach($whitelist['host'] as $host){
+       preg_match("/https?:\/\/([^\/]*)/i",$referer,$m);
+       $refererhost=isset($m[1])?$m[1]:"";
+       $host = str_replace(".","\.",$host);
+       if($host && $refererhost && preg_match("/$host/",$refererhost)){
+            return false;
+       }
+    }
+    return true;
+}
