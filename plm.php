@@ -29,6 +29,8 @@
 define("Page404","a");
 //缓存目录
 define("CacheDir","./caches");
+//图片HTTP缓存时间
+define("expires","+1 days");
 //是否打开排错功能
 define("Debug",true);
 //图片参数错误时，显示原始图片

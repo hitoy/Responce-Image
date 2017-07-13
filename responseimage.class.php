@@ -183,11 +183,13 @@ class ResponseImage{
         }else if(strtotime($modified_since) >= strtotime($lastmodified)){
             header("HTTP/1.1 304 Not Modified");
         }else{
-            header("HTTP/1.1 200 OK");
+            $expires = strtotime(expires);
+            $content = file_get_contents($this->Image);
+
             header("Content-Type:".$this->MIMETYPE);
             header("Last-Modified:".$lastmodified);
             header("ETag:".$etag);
-            $content = file_get_contents($this->Image);
+            if($expires*1>1) header("Expires:".gmdate("D, d M Y H:i:s T",$expires));
             header("Content-Length:".strlen($content));
             echo $content;
         }
