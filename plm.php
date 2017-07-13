@@ -26,7 +26,7 @@
  * 最基础的配置:
  */
 //404页面
-define("Page404","a");
+define("Page404","404.html");
 //缓存目录
 define("CacheDir","./caches");
 //图片HTTP缓存时间
