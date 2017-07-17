@@ -28,14 +28,14 @@
 //404页面
 define("Page404","404.html");
 //缓存目录
-define("CacheDir","./caches");
+define("CacheDir","../caches");
 //图片HTTP缓存时间
 define("expires","+1 days");
 //是否打开排错功能
 define("Debug",true);
 //图片参数错误时，显示原始图片
 define("DisplayRaw",false);
-//是否对图片的进行外链保护
+//是否对图片的进行防盗保护
 define("ImageProtect",false);
 //图片保护白名单
 $whitelist=array("ip"=>array('127.0.0.1','::1'),"useragent"=>array('Bingbot','Googlebot','BaiduSpider','YandexBot','360Spider'),'host'=>array('localhost'));
@@ -49,7 +49,7 @@ if(defined('ImageProtect') && ImageProtect == true && is_forbid()){
    die;
 }
 require_once("./responseimage.class.php");
-$img = new ResponseImage("./caches");
+$img = new ResponseImage(CacheDir);
 $img->display();
 
 function is_forbid(){
