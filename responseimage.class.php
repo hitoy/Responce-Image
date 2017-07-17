@@ -30,12 +30,17 @@ class ResponseImage{
         $this->CacheDir=realpath($cachedir)."/";
         //原始信息处理:获取请求的原始图片
         preg_match("/([^\/]*\.(jpg|gif|png|jpeg))(.*)$/i",$_SERVER['REQUEST_URI'],$m);
-        if(!empty($m[1]) && file_exists($m[1])){
-            $this->RawImage = realpath($_SERVER['DOCUMENT_ROOT'])."/".$m[1];
-        }else if(!file_exists($m[1])){
-            display_error(404,Page404);
+
+        if(!empty($m[1])){
+            $requestimg =  realpath($_SERVER['DOCUMENT_ROOT'])."/".$m[1];
         }else{
             display_error(500,"请求错误，请检查您的伪静态规则是否正确!");
+        }
+
+        if(file_exists($requestimg)){
+            $this->RawImage = realpath($_SERVER['DOCUMENT_ROOT'])."/".$m[1];
+        }else if(!file_exists($requestimg)){
+            display_error(404,Page404);
         }
 
         //原始图片相关信息
@@ -187,7 +192,6 @@ class ResponseImage{
         }else{
             $expires = strtotime(expires);
             $content = file_get_contents($this->Image);
-
             header("Content-Type:".$this->MIMETYPE);
             header("Last-Modified:".$lastmodified);
             header("ETag:".$etag);
