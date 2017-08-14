@@ -6,7 +6,7 @@
  */
 
 class ResponseImage{
-    //原始图片路径，长度和宽度
+    //原始图片路径
     public $RawImage;
 
     //新图片缓存目录
@@ -28,17 +28,22 @@ class ResponseImage{
 
     public function __construct($cachedir){
         $this->CacheDir=realpath($cachedir)."/";
+        //获取请求的服务器资源
+        $requesturi = realpath($_SERVER['DOCUMENT_ROOT']).'/'.$_SERVER['REQUEST_URI'];
         //原始信息处理:获取请求的原始图片
-        preg_match("/([^\/]*\.(jpg|gif|png|jpeg))(.*)$/i",$_SERVER['REQUEST_URI'],$m);
+        preg_match("/([^\/]*\.(jpg|gif|png|jpeg))(.*)$/i",$requesturi,$m);
 
-        if(!empty($m[1])){
-            $requestimg =  realpath($_SERVER['DOCUMENT_ROOT'])."/".$m[1];
+        //如果不符合这个规则说明不是系统要处理的请求
+        if(empty($m)){
+          display_error(500,"请求错误，请检查您的伪静态规则是否正确!");
         }else{
-            display_error(500,"请求错误，请检查您的伪静态规则是否正确!");
+            $filename = $m[1];
+            $path = substr($requesturi,0,strpos($requesturi,$filename));
+            $requestimg = realpath($path.$filename);
         }
 
         if(file_exists($requestimg)){
-            $this->RawImage = realpath($_SERVER['DOCUMENT_ROOT'])."/".$m[1];
+            $this->RawImage = $requestimg;
         }else if(!file_exists($requestimg)){
             display_error(404,Page404);
         }
@@ -126,7 +131,7 @@ class ResponseImage{
         if($y>$imgheight) $y = $y-$imgheight;
         if($w>$imgwidth-$x) $w=$imgwidth-$x;
         if($h==='auto') $h=$imgheight*$w/$imgwidth;
-        if($h>$imgheight-$y) $h=$y-$imgheight;
+        if($h>$imgheight-$y) $h=$imgheight-$y;
         $new = imagecreatetruecolor($w,$h);
         if(imagecopyresampled($new,$imgres,0,0,$x,$y,$w,$h,$imgwidth-$x,$imgheight-$y)){
             imagedestroy($imgres);
@@ -145,8 +150,7 @@ class ResponseImage{
         if($y>$imgheight) $y = $y-$imgheight;
         if($w>$imgwidth-$x) $w=$imgwidth-$x;
         if($h==='auto') $h=$imgheight*$w/$imgwidth;
-        if($h>$imgheight-$y) $h=$y-$imgheight;
-
+        if($h>$imgheight-$y) $h=$imgheight-$y;
         $new = imagecrop($imgres,array("x"=>$x,"y"=>$y,'width'=>$w,'height'=>$h));
         imagedestroy($imgres);
         return $new;
@@ -177,7 +181,7 @@ class ResponseImage{
             }
         }
         @unlink($this->Image);
-        $storage($res,$this->Image);
+        $storage($res,$this->Image,ImageQuality);
     }
 
     public function display(){
