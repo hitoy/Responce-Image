@@ -26,17 +26,19 @@
  * 最基础的配置:
  */
 //404页面
-define("Page404","404.html");
+define("Page404","../404.html");
 //缓存目录
-define("CacheDir","../caches");
+define("CacheDir","./imagecaches");
 //图片HTTP缓存时间
-define("expires","+1 days");
+define("expires","+30 days");
 //是否打开排错功能
 define("Debug",true);
 //图片参数错误时，显示原始图片
-define("DisplayRaw",false);
+define("DisplayRaw",true);
 //是否对图片的进行防盗保护
 define("ImageProtect",false);
+//图片保存质量
+define("ImageQuality",100);
 //图片保护白名单
 $whitelist=array("ip"=>array('127.0.0.1','::1'),"useragent"=>array('Bingbot','Googlebot','BaiduSpider','YandexBot','360Spider'),'host'=>array('localhost'));
 
