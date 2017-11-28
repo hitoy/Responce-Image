@@ -6,87 +6,74 @@
  */
 
 class ResponseImage{
-    //原始图片路径
+    //原始图片绝对路径
     public $RawImage;
-
-    //新图片缓存目录
-    private $CacheDir;
-    //实际请求图片缓存路径和文件名
-    private $Image;
-    //新图片相关信息
+    //原始图片的文件名
+    private $RawFileName;
+    //原始图片的相关信息
     private $Width;
     private $Height;
     private $MIMETYPE;
 
+    //实际请求图片缓存绝对路径
+    private $Image;
+
+    //图片缓存目录
+    private $CacheDir;
+
     //其它相关信息
-    //是否是直接请求位处理的图片
-    private $isDirect = false;
     //支持的处理动作
     private $supportaction=array("crop","reduce");
     //图片处理动作:二维数组,格式为array(array(action=>"剪裁",x=>"起始X点",y=>"起始Y点",width=>"宽度",height=>"高度"),array(action=>"缩放",x=>"起始X点",y=>"起始Y点",width="宽度",height=>"高度"));
-    private $psactions=array();
+    private $actions=array();
+
+    //环境变量
+    private $docroot;
+
+    //是否是直接请求位处理的图片
+    private $isDirect = false;
+
 
     public function __construct($cachedir){
+        $this->docroot = realpath($_SERVER["DOCUMENT_ROOT"]);
+        if(!is_dir($cachedir)){mkdir($cachedir);}
         $this->CacheDir=realpath($cachedir)."/";
-        //获取请求的服务器资源
-        $requesturi = realpath($_SERVER['DOCUMENT_ROOT']).'/'.$_SERVER['REQUEST_URI'];
-        //原始信息处理:获取请求的原始图片
-        preg_match("/([^\/]*\.(jpg|gif|png|jpeg))(.*)$/i",$requesturi,$m);
-
-        //如果不符合这个规则说明不是系统要处理的请求
+        preg_match("/(^.*?([^\/]*\.(jpg|jpeg|gif|png)))(?=(\/.*))/i",$_SERVER['REQUEST_URI'],$m);
         if(empty($m)){
-          display_error(500,"请求错误，请检查您的伪静态规则是否正确!");
+            //请求 原始图片
+            $this->Image=$this->RawImage=$this->docroot.$_SERVER['REQUEST_URI'];
         }else{
-            $filename = $m[1];
-            $path = substr($requesturi,0,strpos($requesturi,$filename));
-            $requestimg = realpath($path.$filename);
+            //请求 处理之后的图片
+            $this->RawImage=$this->docroot.$m[1];
+            $this->RawFileName=$m[2];
+            $this->init($m[4]);
         }
-
-        if(file_exists($requestimg)){
-            $this->RawImage = $requestimg;
-        }else if(!file_exists($requestimg)){
+        //原始图片不存在
+        if(!file_exists($this->RawImage)){
             display_error(404,Page404);
         }
-
-        //原始图片相关信息
-        $RAWInfo = getimagesize($this->RawImage);
-        $this->MIMETYPE = $RAWInfo['mime'];
-
-        //初始化处理动作，并获取Image的
-        $actionresult = $this->PsActioninit();
-        if(empty($m[3])){
-            //请求的是原始图片
-            $this->Image=$this->RawImage;
-        }elseif(!empty($m[3]) && $actionresult ===false && defined("DisplayRaw") && DisplayRaw ===true){
-            //图片参数错误，但设置为参数错误显示原始图片
-            $this->Image=$this->RawImage;
-        }else if(!empty($m[3]) && $actionresult===false && DisplayRaw ===false){
-            //图片参数错误，但设置为参数错误直接报错
-            display_error(500,"图片参数请求参数错误，请检查您的参数或者查看帮助文档!");
-        }else if(!empty($m[3]) && (!file_exists($this->Image) || filemtime($this->Image) < filemtime($this->RawImage))){
-            //请求的不是原始图片，需要生成客户端指定的图片
-            //前提:需要生成的图片不存在缓存||原始图片更改过了
+        //请求处理图片(动作不为空)
+        if(!empty($this->actions)){
+            //原始图片相关信息
+            $RAWInfo = getimagesize($this->RawImage);
+            $this->MIMETYPE = $RAWInfo['mime'];
             $this->imageinit();
         }
+        $this->display();
     }
 
-    //srcset URL方式获取需要的图片分辨率URL格式为
+    //初始化图片：1，生成处理动作，2，获取缓存文件名$this->Image
     //剪裁:example.com/example.jpg/(crop:[x[,y,]]width[,height])
     //缩放:example.com/example.jpg/(reduce:[x[,y,]]width[,height])
     //括号里面为动作，可以连续多次使用:
     //example.com/example.jpg/(crop:[x[,y,]]width[,height])/(reduce:[x,[y,]]width[,height])为先进行剪裁，然后压缩处理
     //[]中的为可选值，x,y不填默认为0,height不填默认为图片高度（剪裁）和宽度缩小后图片高度（缩放）
-    private function PsActioninit(){
-        preg_match("/([^\/]*\.(jpg|jpeg|png|gif))([\/\:(reduce|crop)\,\d]*)$/i",$_SERVER['REQUEST_URI'],$m);
-        if(empty($m[3])){
-            return false;
-        }
-        $actions = explode("/",trim($m[3],"/"));
+    private function init($actionstr){
+        $actions = explode("/",trim($actionstr,"/"));
         foreach($actions as $a){
-            $splitpos = strpos($a,":");
-            $action = substr($a,0,$splitpos);
-            if(!in_array($action,$this->supportaction)) continue;
-            $datas = explode(",",substr($a,$splitpos+1));
+            if($a=="") continue;
+            $action = substr($a,0,strpos($a,":"));
+            $datas= explode(",",substr($a,strpos($a,":")+1));
             $len = count($datas);
             switch($len){
             case 0:
@@ -115,11 +102,10 @@ class ResponseImage{
                 $width = $datas[2]*1;
                 $height = $datas[3]*1;
             }
-            array_push($this->psactions,array("action"=>$action,"x"=>$x,"y"=>$y,"width"=>$width,"height"=>$height));
+            array_push($this->actions,array("action"=>$action,"x"=>$x,"y"=>$y,"width"=>$width,"height"=>$height));
             $this->Image .= "$action-$x-$y-$width-$height-";
         }
-        $this->Image=$this->CacheDir.$this->Image.$m[1];
-        return true;
+        $this->Image=$this->CacheDir.$this->Image.$this->RawFileName;
     }
 
 
@@ -169,7 +155,7 @@ class ResponseImage{
             $res = imagecreatefrompng($this->RawImage);
             $storage="imagepng";
         }
-        foreach($this->psactions as $actions){
+        foreach($this->actions as $actions){
             $x = $actions['x'];
             $y = $actions['y'];
             $w = $actions['width'];
@@ -205,7 +191,6 @@ class ResponseImage{
         }
         return; 
     }
-
 }
 //展示错误信息
 function display_error($errorcode,$html){
@@ -219,6 +204,7 @@ function display_error($errorcode,$html){
     }
     die;
 }
+
 //COOKIE方式获取图片分辨率:现在不使用
 function CookieGetResolution(){
     $width="100%";
