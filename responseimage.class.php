@@ -32,6 +32,7 @@ class ResponseImage{
     //环境变量
     private $docroot;
 
+    public $supporttype=array("image/jpeg","image/png");
 
     public function __construct($cachedir){
         $this->docroot = realpath($_SERVER["DOCUMENT_ROOT"]);
@@ -58,9 +59,11 @@ class ResponseImage{
         }else{
             $this->init($actions);
         }
-        //请求处理图片(动作不为空 , (新图片不存在或者老图片更改))
-        if(!file_exists($this->Image) || filemtime($this->RawImage) > filemtime($this->Image)){
+        //是否生成图片(动作不为空 , (新图片不存在或者老图片更改))
+        if(!file_exists($this->Image) || filemtime($this->RawImage) > filemtime($this->Image) && in_array($this->MIMETYPE,$this->supporttype)){
             $this->generate();
+        }else if(!in_array($this->MIMETYPE,$this->supporttype)){
+            $this->Image=$this->RawImage;
         }
     }
 
@@ -119,7 +122,7 @@ class ResponseImage{
         if($w>$imgwidth-$x) $w=$imgwidth-$x;
         if($h==='auto') $h=$imgheight*$w/$imgwidth;
         if($h>$imgheight-$y) $h=$imgheight-$y;
-        $new = imagecreate($w,$h);
+        $new = imagecreatetruecolor($w,$h);
         if(imagecopyresampled($new,$imgres,0,0,$x,$y,$w,$h,$imgwidth-$x,$imgheight-$y)){
             imagedestroy($imgres);
             return $new;
@@ -148,13 +151,10 @@ class ResponseImage{
     public function generate(){
         if($this->MIMETYPE=="image/jpeg"){
             $src = imagecreatefromjpeg($this->RawImage);
-            $storage="imagejpeg";
-        }else if($this->MIMETYPE=="image/gif"){
-            $src = imagecreatefromgif($this->RawImage);
-            $storage="imagegif";
         }else if($this->MIMETYPE=="image/png"){
             $src = imagecreatefrompng($this->RawImage);
-            $storage="imagepng";
+        }else if($this->MIMETYPE=="image/gif"){
+            $src = imagecreatefromgif($this->RawImage);
         }
         //$res = imagecreate($this->Width,$this->Height);
         //imagecopyresampled($res,$src,0, 0, 0,0,$this->Width,$this->Height,$this->Width,$this->Height);
@@ -170,14 +170,15 @@ class ResponseImage{
             }
         }
         if($this->MIMETYPE=="image/jpeg"){
-            $storage($src,$this->Image,ImageQuality);
+            imagejpeg($src,$this->Image,ImageQuality);
         }else if($this->MIMETYPE=="image/png"){
-            $storage($src,$this->Image,ImageQuality/10);
+            imagesavealpha($src,true);
+            imagepng($src,$this->Image,(100-ImageQuality)/10,PNG_NO_FILTER);
         }else{
-            $storage($src,$this->Image);
+            imagegif($src,$this->Image);
         }
         imagedestroy($src);
-        if(defined("ImageCompress") && ImageCompress === true){
+        if(defined("ImageCompress") && ImageCompress === true && $this->MIMETYPE=="image/jpeg"){
             $image = new JPEG($this->Image);
             $image->compress();
             $image->Storage();
@@ -192,10 +193,10 @@ class ResponseImage{
             header("Image-Compress:No");
         }
         $etag = md5_file($this->Image);
-        $lastmodified = gmdate("D, d M Y H:i:s T",filemtime($this->Image));
         $none_match = isset($_SERVER["HTTP_IF_NONE_MATCH"])?$_SERVER["HTTP_IF_NONE_MATCH"]:'';
-        $modified_since = isset($_SERVER["HTTP_IF_MODIFIED_SINCE"])?strtotime($_SERVER["HTTP_IF_MODIFIED_SINCE"]):0;
-        if($etag === $none_match){
+        $modified_since = isset($_SERVER["HTTP_IF_MODIFIED_SINCE"])?$_SERVER["HTTP_IF_MODIFIED_SINCE"]:0;
+        $lastmodified = (gmdate("D, d M Y H:i:s T",filemtime($this->Image)));
+        if($etag===$none_match){
             header("HTTP/1.1 304 Not Modified");
         }else if(strtotime($modified_since) >= strtotime($lastmodified)){
             header("HTTP/1.1 304 Not Modified");
@@ -204,7 +205,7 @@ class ResponseImage{
             $content = file_get_contents($this->Image);
             header("Content-Type:".$this->MIMETYPE);
             header("Last-Modified:".$lastmodified);
-            header("ETag:".$etag);
+            header("ETag:$etag");
             if($expires*1>1) header("Expires:".gmdate("D, d M Y H:i:s T",$expires));
             header("Content-Length:".strlen($content));
             echo $content;

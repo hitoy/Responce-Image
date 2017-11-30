@@ -1,2 +1,0 @@
-RewriteEngine on
-RewriteRule \.(jpg|jpeg|gif|png) /Responsive-Image/plm.php [NC]
