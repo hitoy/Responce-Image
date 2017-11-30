@@ -171,7 +171,17 @@ class ResponseImage{
     }
 
     public function display(){
-        $etag = md5_file($this->Image);
+        //压缩图片
+        if($this->MIMETYPE=="image/jpeg" && defined("ImageCompress") && ImageCompress === true){
+            $image = new JPEG($this->Image);
+            $image->compress();
+            $imagedata = $image->GetImageBin();
+            header("Image-Compress:YES");
+        }else{
+            header("Image-Compress:No");
+            $imagedata = file_get_contents($this->Image);
+        }
+        $etag = md5($imagedata);
         $lastmodified = gmdate("D, d M Y H:i:s T",filemtime($this->Image));
         $none_match = isset($_SERVER["HTTP_IF_NONE_MATCH"])?$_SERVER["HTTP_IF_NONE_MATCH"]:'';
         $modified_since = isset($_SERVER["HTTP_IF_MODIFIED_SINCE"])?strtotime($_SERVER["HTTP_IF_MODIFIED_SINCE"]):0;
@@ -187,7 +197,7 @@ class ResponseImage{
             header("ETag:".$etag);
             if($expires*1>1) header("Expires:".gmdate("D, d M Y H:i:s T",$expires));
             header("Content-Length:".strlen($content));
-            echo $content;
+            echo $imagedata;
         }
         return; 
     }

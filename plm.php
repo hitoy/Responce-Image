@@ -39,6 +39,8 @@ define("DisplayRaw",true);
 define("ImageProtect",false);
 //图片保存质量
 define("ImageQuality",100);
+//对图片进行无损压缩
+define("ImageCompress",true);
 //图片保护白名单
 $whitelist=array("ip"=>array('127.0.0.1','::1'),"useragent"=>array('Bingbot','Googlebot','BaiduSpider','YandexBot','360Spider'),'host'=>array('localhost'));
 
@@ -51,6 +53,7 @@ if(defined('ImageProtect') && ImageProtect == true && is_forbid()){
    die;
 }
 require_once("./responseimage.class.php");
+require_once("./jpeg.class.php");
 $img = new ResponseImage(CacheDir);
 $img->display();
 
