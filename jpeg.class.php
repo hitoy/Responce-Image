@@ -12,14 +12,16 @@ class JPEG{
     private $markerkey=array("soi"=>0xd8,"sof0"=>0xc0,"sof2"=>0xc2,"dht"=>0xc4,"dqt"=>0xdb,"dri"=>0xdd,"sos"=>0xda,"rst"=>array(0xd0,0xd1,0xd2,0xd3,0xd4,0xd5,0xd6,0xd7),"app"=>array(0xe0,0xe1,0xe2,0xe3,0xe4,0xe5,0xe6,0xe7,0xe8,0xe9,0xea,0xeb,0xec,0xed,0xee,0xef),"com"=>0xfe,"eoi"=>0xd9);
     private $markerdata=array();
     private $ImageScan;
-
-
     private $Image;
     private $PosPointer;
     private $ImageSize;
-    public function __construct($filename){
-        $this->Image = fopen($filename,"rb");
-        $this->ImageSize= filesize($filename);
+    public function __construct($argument){
+        if(file_exists($argument)){
+            $this->Image = fopen($argument,"rb+");
+            $this->ImageSize= filesize($argument);
+        }else{
+            die("File Not Exists");
+        }
         if($this->GetByte(2)!==0xd8ff){
             die("Not a JPEG Image");
         }
@@ -100,11 +102,9 @@ class JPEG{
     public function GetImageBin(){
         return pack("S",0xd8ff).$this->GetMarkerData().$this->ImageScan.pack("S",0xd9ff);
     }
-    public function Storage($filename){
-        if(file_exists($filename)) unlink($filename);
-        $f = fopen($filename,"ab+");
-        fwrite($f,$this->GetImageBin());
-        fclose($f);
+    public function Storage(){
+        fseek($this->Image,0);
+        fwrite($this->Image,$this->GetImageBin());
     }
     public function __destruct(){
         fclose($this->Image);

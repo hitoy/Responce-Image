@@ -1,2 +1,2 @@
 RewriteEngine on
-RewriteRule \.(jpg|jpeg|gif|png)(\/(corp:reduce)\:[\d\,]*)* /plm.php [NC]
+RewriteRule \.(jpg|jpeg|gif|png) /Responsive-Image/plm.php [NC]

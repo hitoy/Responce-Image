@@ -10,6 +10,8 @@ class ResponseImage{
     public $RawImage;
     //原始图片的文件名
     private $RawFileName;
+    //原始图片的路径;
+    private $RawFilePath;
     //原始图片的相关信息
     private $Width;
     private $Height;
@@ -30,36 +32,36 @@ class ResponseImage{
     //环境变量
     private $docroot;
 
-    //是否是直接请求位处理的图片
-    private $isDirect = false;
-
 
     public function __construct($cachedir){
         $this->docroot = realpath($_SERVER["DOCUMENT_ROOT"]);
         if(!is_dir($cachedir)){mkdir($cachedir);}
         $this->CacheDir=realpath($cachedir)."/";
-        preg_match("/(^.*?([^\/]*\.(jpg|jpeg|gif|png)))(?=(\/.*))/i",$_SERVER['REQUEST_URI'],$m);
-        if(empty($m)){
-            //请求 原始图片
-            $this->Image=$this->RawImage=$this->docroot.$_SERVER['REQUEST_URI'];
-        }else{
-            //请求 处理之后的图片
-            $this->RawImage=$this->docroot.$m[1];
-            $this->RawFileName=$m[2];
-            $this->init($m[4]);
-        }
+        //preg_match("/(^.*?([^\/]*\.(jpg|jpeg|gif|png)))(?=(\/.*))/i",$_SERVER['REQUEST_URI'],$m);
+        preg_match("/(^.*?([^\/]*\.(jpg|jpeg|gif|png)))(.*)/i",$_SERVER['REQUEST_URI'],$m);
+        //原始图片
+        $this->RawImage=$this->docroot.$m[1];
+        //原始文件名
+        $this->RawFileName=basename($this->RawImage);
+        //原始路径
+        $this->RawFilePath=dirname($this->RawImage);
+        //图片处理动作
+        $actions=$m[4];
+        //原始图片相关信息
+        $RAWInfo = getimagesize($this->RawImage);
+        $this->MIMETYPE = $RAWInfo['mime'];
+        $this->Width = $RAWInfo[0];
+        $this->Height = $RAWInfo[1];
         //原始图片不存在
         if(!file_exists($this->RawImage)){
             display_error(404,Page404);
+        }else{
+            $this->init($actions);
         }
-        //请求处理图片(动作不为空)
-        if(!empty($this->actions)){
-            //原始图片相关信息
-            $RAWInfo = getimagesize($this->RawImage);
-            $this->MIMETYPE = $RAWInfo['mime'];
-            $this->imageinit();
+        //请求处理图片(动作不为空 , (新图片不存在或者老图片更改))
+        if(!file_exists($this->Image) || filemtime($this->RawImage) > filemtime($this->Image)){
+            $this->generate();
         }
-        $this->display();
     }
 
     //初始化图片：1，生成处理动作，2，获取缓存文件名$this->Image
@@ -105,9 +107,8 @@ class ResponseImage{
             array_push($this->actions,array("action"=>$action,"x"=>$x,"y"=>$y,"width"=>$width,"height"=>$height));
             $this->Image .= "$action-$x-$y-$width-$height-";
         }
-        $this->Image=$this->CacheDir.$this->Image.$this->RawFileName;
+        $this->Image=$this->CacheDir.$this->Image.md5($this->RawFilePath)."-".$this->RawFileName;
     }
-
 
     //低级功能：缩放图片：第一个参数为图片资源参数，以原始图片
     private function reduceimage($imgres,$x,$y,$w,$h){
@@ -118,7 +119,7 @@ class ResponseImage{
         if($w>$imgwidth-$x) $w=$imgwidth-$x;
         if($h==='auto') $h=$imgheight*$w/$imgwidth;
         if($h>$imgheight-$y) $h=$imgheight-$y;
-        $new = imagecreatetruecolor($w,$h);
+        $new = imagecreate($w,$h);
         if(imagecopyresampled($new,$imgres,0,0,$x,$y,$w,$h,$imgwidth-$x,$imgheight-$y)){
             imagedestroy($imgres);
             return $new;
@@ -144,44 +145,53 @@ class ResponseImage{
 
 
     //初始化并缩放图片
-    public function imageinit(){
+    public function generate(){
         if($this->MIMETYPE=="image/jpeg"){
-            $res = imagecreatefromjpeg($this->RawImage);
+            $src = imagecreatefromjpeg($this->RawImage);
             $storage="imagejpeg";
         }else if($this->MIMETYPE=="image/gif"){
-            $res = imagecreatefromgif($this->RawImage);
+            $src = imagecreatefromgif($this->RawImage);
             $storage="imagegif";
         }else if($this->MIMETYPE=="image/png"){
-            $res = imagecreatefrompng($this->RawImage);
+            $src = imagecreatefrompng($this->RawImage);
             $storage="imagepng";
         }
+        //$res = imagecreate($this->Width,$this->Height);
+        //imagecopyresampled($res,$src,0, 0, 0,0,$this->Width,$this->Height,$this->Width,$this->Height);
         foreach($this->actions as $actions){
             $x = $actions['x'];
             $y = $actions['y'];
             $w = $actions['width'];
             $h = $actions['height'];
             if($actions['action'] === 'reduce'){
-                $res = $this->reduceimage($res,$x,$y,$w,$h);
+                $src = $this->reduceimage($src,$x,$y,$w,$h);
             }else if($actions['action']==='crop'){
-                $res = $this->cropimage($res,$x,$y,$w,$h);
+                $src = $this->cropimage($src,$x,$y,$w,$h);
             }
         }
-        @unlink($this->Image);
-        $storage($res,$this->Image,ImageQuality);
+        if($this->MIMETYPE=="image/jpeg"){
+            $storage($src,$this->Image,ImageQuality);
+        }else if($this->MIMETYPE=="image/png"){
+            $storage($src,$this->Image,ImageQuality/10);
+        }else{
+            $storage($src,$this->Image);
+        }
+        imagedestroy($src);
+        if(defined("ImageCompress") && ImageCompress === true){
+            $image = new JPEG($this->Image);
+            $image->compress();
+            $image->Storage();
+        }
     }
 
     public function display(){
         //压缩图片
         if($this->MIMETYPE=="image/jpeg" && defined("ImageCompress") && ImageCompress === true){
-            $image = new JPEG($this->Image);
-            $image->compress();
-            $imagedata = $image->GetImageBin();
             header("Image-Compress:YES");
         }else{
             header("Image-Compress:No");
-            $imagedata = file_get_contents($this->Image);
         }
-        $etag = md5($imagedata);
+        $etag = md5_file($this->Image);
         $lastmodified = gmdate("D, d M Y H:i:s T",filemtime($this->Image));
         $none_match = isset($_SERVER["HTTP_IF_NONE_MATCH"])?$_SERVER["HTTP_IF_NONE_MATCH"]:'';
         $modified_since = isset($_SERVER["HTTP_IF_MODIFIED_SINCE"])?strtotime($_SERVER["HTTP_IF_MODIFIED_SINCE"]):0;
@@ -197,7 +207,7 @@ class ResponseImage{
             header("ETag:".$etag);
             if($expires*1>1) header("Expires:".gmdate("D, d M Y H:i:s T",$expires));
             header("Content-Length:".strlen($content));
-            echo $imagedata;
+            echo $content;
         }
         return; 
     }
