@@ -38,7 +38,7 @@ define("DisplayRaw",true);
 //是否对图片的进行防盗保护
 define("ImageProtect",false);
 //图片保存质量
-define("ImageQuality",60);
+define("ImageQuality",80);
 //对图片进行无损压缩
 define("ImageCompress",true);
 //图片保护白名单

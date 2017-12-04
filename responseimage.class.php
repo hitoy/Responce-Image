@@ -48,17 +48,17 @@ class ResponseImage{
         $this->RawFilePath=dirname($this->RawImage);
         //图片处理动作
         $actions=$m[4];
-        //原始图片相关信息
-        $RAWInfo = getimagesize($this->RawImage);
-        $this->MIMETYPE = $RAWInfo['mime'];
-        $this->Width = $RAWInfo[0];
-        $this->Height = $RAWInfo[1];
         //原始图片不存在
         if(!file_exists($this->RawImage)){
             display_error(404,Page404);
         }else{
             $this->init($actions);
         }
+        //原始图片相关信息
+        $RAWInfo = getimagesize($this->RawImage);
+        $this->MIMETYPE = $RAWInfo['mime'];
+        $this->Width = $RAWInfo[0];
+        $this->Height = $RAWInfo[1];
         //是否生成图片(动作不为空 , (新图片不存在或者老图片更改))
         if(!file_exists($this->Image) || filemtime($this->RawImage) > filemtime($this->Image) && in_array($this->MIMETYPE,$this->supporttype)){
             $this->generate();
