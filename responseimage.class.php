@@ -59,7 +59,13 @@ class ResponseImage{
         $this->MIMETYPE = $RAWInfo['mime'];
         $this->Width = $RAWInfo[0];
         $this->Height = $RAWInfo[1];
-        //是否生成图片(动作不为空 , (新图片不存在或者老图片更改))
+
+        //需要重新生成图片的情况
+        //1，新图片不存在
+        //2，老图片有更新
+        //3，支持处理的图片类型
+        //
+        //对于不支持的图片类型，则直接返回原图片
         if(!file_exists($this->Image) || filemtime($this->RawImage) > filemtime($this->Image) && in_array($this->MIMETYPE,$this->supporttype)){
             $this->generate();
         }else if(!in_array($this->MIMETYPE,$this->supporttype)){
@@ -174,7 +180,7 @@ class ResponseImage{
         }else if($this->MIMETYPE=="image/png"){
             imagesavealpha($src,true);
             imagepng($src,$this->Image,(100-ImageQuality)/10,PNG_NO_FILTER);
-        }else{
+        }else if($this->MIMETYPE=="image/gif"){
             imagegif($src,$this->Image);
         }
         imagedestroy($src);
